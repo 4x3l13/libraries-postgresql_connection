@@ -51,7 +51,7 @@ class ConnectionDB:
             if self.__connection is not None:
                 self.__connection.close()
                 logger.debug(CLOSE_CONNECTION)
-        except ConnectionError as exc:
+        except (ConnectionError, Exception) as exc:
             logger.error(str(exc), exc_info=True)
 
     def __get_connection(self) -> bool:
@@ -70,7 +70,8 @@ class ConnectionDB:
                                                  port=self.__setup["port"])
             logger.debug(ESTABLISHED_CONNECTION, self.__setup["host"])
             return True
-        except ConnectionError as exc:
+        except (ConnectionError, Exception) as exc:
+            self.__connection = None
             logger.error(str(exc), exc_info=True)
             return False
 
