@@ -50,10 +50,9 @@ class ConnectionDB:
         try:
             if self.__connection is not None:
                 self.__connection.close()
-                logger.info(CLOSE_CONNECTION)
+                logger.debug(CLOSE_CONNECTION)
         except ConnectionError as exc:
-            logger.error(str(exc),
-                          exc_info=True)
+            logger.error(str(exc), exc_info=True)
 
     def __get_connection(self) -> bool:
         """Crear y obtener la conexión a una base de datos
@@ -69,11 +68,10 @@ class ConnectionDB:
                                                  user=self.__setup["user"],
                                                  password=self.__setup["password"],
                                                  port=self.__setup["port"])
-            logger.info(ESTABLISHED_CONNECTION, self.__setup["host"])
+            logger.debug(ESTABLISHED_CONNECTION, self.__setup["host"])
             return True
         except ConnectionError as exc:
-            logger.error(str(exc),
-                          exc_info=True)
+            logger.error(str(exc), exc_info=True)
             return False
 
     def read_data(self, query: str, parameters: tuple = (), datatype: str = "dict") -> [Dict, List]:
@@ -95,8 +93,8 @@ class ConnectionDB:
                     with self.__connection as cnx:
                         with cnx.cursor() as cursor:
                             # Ejecutar la consulta
-                            logger.debug(f'Executing query: {query}')
                             cursor.execute(query, parameters)
+                            query = cursor.mogrify(query, parameters)
                             data = cursor.fetchall()
                             # Gets column_names
                             columns = [column[0].upper() for column in cursor.description]
@@ -108,10 +106,10 @@ class ConnectionDB:
                                 show_data = dictionary
                             elif datatype == 'list':
                                 show_data = [columns, data]
-                        logger.info(DATA_OBTAINED)
+                        logger.info(DATA_OBTAINED, query.decode('utf-8'))
+                        return show_data
                 except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
-                    logger.error(str(exc),
-                                  exc_info=True)
+                    logger.error(str(exc), exc_info=True)
                 finally:
                     self.__close_connection()
             else:
@@ -136,20 +134,19 @@ class ConnectionDB:
             try:
                 with self.__connection as cnx:
                     with cnx.cursor() as cursor:
-                        logger.debug(EXECUTING_QUERY, query)
                         cursor.execute(query, parameters)
                     cnx.commit()
-                    logger.info(EXECUTED_QUERY)
+                    logger.info(EXECUTED_QUERY, query)
                     return True
             except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
+                logger.error(str(exc), exc_info=True)
                 cnx.rollback()
-                logger.error(str(exc),
-                              exc_info=True)
+
                 return False
             finally:
                 self.__close_connection()
         else:
-            logger.error(NO_CONNECTION)
+            logger.warning(NO_CONNECTION)
             return False
 
     def execute_many(self, query: str, values: List) -> bool:
@@ -167,18 +164,16 @@ class ConnectionDB:
                 with self.__get_connection() as cnx:
                     with cnx.cursor() as cursor:
                         cursor.prepare(query)
-                        logger.debug(EXECUTING_QUERY, query)
                         cursor.executemany(None, values)
                     cnx.commit()
-                    logger.info(EXECUTED_QUERY)
+                    logger.info(EXECUTED_QUERY, query)
                     return True
             except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
+                logger.error(str(exc), exc_info=True)
                 cnx.rollback()
-                logger.error(str(exc),
-                              exc_info=True)
                 return False
             finally:
                 self.__close_connection()
         else:
-            logger.error(NO_CONNECTION)
+            logger.warning(NO_CONNECTION)
             return False
