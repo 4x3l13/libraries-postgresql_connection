@@ -1,1 +1,1 @@
-from .postgresql_cnx import ConnectionDB
+from .postgresql_cnx import ConnectionDB as CnxPostgresql
