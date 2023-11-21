@@ -102,7 +102,7 @@ class PoolDB:
                             show_data = dictionary
                         elif datatype == 'list':
                             show_data = [columns, data]
-                    logger.info(DATA_OBTAINED, query.decode('utf-8'))
+                    logger.info(f"{DATA_OBTAINED} {query.decode('utf-8')}")
                     return show_data
             except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
                 logger.error(str(exc), exc_info=True)
@@ -127,7 +127,7 @@ class PoolDB:
                 with cnx.cursor() as cursor:
                     cursor.execute(query, parameters)
                 cnx.commit()
-                logger.info(EXECUTED_QUERY, query)
+                logger.info(f"{EXECUTED_QUERY} {query}")
                 return True
         except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
             logger.error(str(exc), exc_info=True)
@@ -151,7 +151,7 @@ class PoolDB:
                     cursor.prepare(query)
                     cursor.executemany(None, values)
                 cnx.commit()
-                logger.info(EXECUTED_QUERY, query)
+                logger.info(f"{EXECUTED_QUERY} {query}")
                 return True
         except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
             logger.error(str(exc), exc_info=True)

@@ -67,7 +67,7 @@ class ConnectionDB:
                                                  user=self.__setup["user"],
                                                  password=self.__setup["password"],
                                                  port=self.__setup["port"])
-            logger.debug(ESTABLISHED_CONNECTION, self.__setup["host"])
+            logger.debug(f"{ESTABLISHED_CONNECTION} {self.__setup['host']}")
             return True
         except (ConnectionError, Exception) as exc:
             self.__connection = None
@@ -106,7 +106,7 @@ class ConnectionDB:
                                 show_data = dictionary
                             elif datatype == 'list':
                                 show_data = [columns, data]
-                        logger.info(DATA_OBTAINED, query.decode('utf-8'))
+                        logger.info(f"{DATA_OBTAINED} {query.decode('utf-8')}")
                         return show_data
                 except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
                     logger.error(str(exc), exc_info=True)
@@ -136,7 +136,7 @@ class ConnectionDB:
                     with cnx.cursor() as cursor:
                         cursor.execute(query, parameters)
                     cnx.commit()
-                    logger.info(EXECUTED_QUERY, query)
+                    logger.info(f"{EXECUTED_QUERY} {query}")
                     return True
             except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
                 logger.error(str(exc), exc_info=True)
@@ -166,7 +166,7 @@ class ConnectionDB:
                         cursor.prepare(query)
                         cursor.executemany(None, values)
                     cnx.commit()
-                    logger.info(EXECUTED_QUERY, query)
+                    logger.info(f"{EXECUTED_QUERY} {query}")
                     return True
             except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
                 logger.error(str(exc), exc_info=True)
