@@ -5,13 +5,11 @@ Created on Mon Dic 26 10:00:00 2022
 @author: Jhonatan Martínez
 """
 
-from MyLogger import setup_logger
+from loguru import logger
 from typing import Dict, List
 import psycopg2
 from psycopg2 import pool
 from .constants import *
-
-logger = setup_logger(__name__)
 
 
 class ConnectionDB:
