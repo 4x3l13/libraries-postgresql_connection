@@ -4,6 +4,7 @@ Created on Mon Dic 26 10:00:00 2022
 
 @author: Jhonatan Martínez
 """
+import threading
 
 from loguru import logger
 from typing import Dict, List
@@ -12,8 +13,18 @@ from psycopg2 import pool
 from .constants import *
 
 
-class ConnectionDB:
+class PoolDB:
     """ Permite realizar una conexión a una Base de Datos"""
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if not cls._instance:
+                cls._instance = super(PoolDB, cls).__new__(cls)
+            cls._instance.__attributes = ['host', 'port', 'sdi', 'user', 'password', 'driver']
+            cls._instance._initialized = False
+            return cls._instance
 
     def __init__(self, setup: Dict[str, str], pool_size: int = 5) -> None:
         """Constructor.
@@ -31,12 +42,13 @@ class ConnectionDB:
         Returns:
             None.
         """
-
+        if self._initialized:
+            return
+        self._initialized = True
         self.__attributes = ['host', 'port', 'sdi', 'user', 'password', 'driver']
-        self.__connection = None
         self.__setup: Dict = setup
         self.__pool_size = pool_size
-        self.__pool = None
+        self.__pool: pool.SimpleConnectionPool = None
         self.__main()
 
     def __main(self) -> None:
@@ -59,30 +71,6 @@ class ConnectionDB:
         except Exception as exc:
             logger.error(f"Error initializing connection pool: {exc}", exc_info=True)
 
-    def __close_connection(self) -> None:
-        """Cerrar la conexión a la base de datos."""
-        try:
-            if self.__connection is not None:
-                self.__pool.putconn(self.__connection)
-                self.__connection = None
-                logger.debug(CLOSE_CONNECTION)
-        except (ConnectionError, Exception) as exc:
-            logger.error(str(exc), exc_info=True)
-
-    def __get_connection(self) -> bool:
-        """Crear y obtener la conexión a una base de datos
-
-        Returns:
-            bool: True si se establece la conexión, False en caso contrario.
-        """
-
-        try:
-            self.__connection = self.__pool.getconn()
-            return True
-        except Exception as exc:
-            logger.error(f"Error obtaining connection from pool: {exc}", exc_info=True)
-            return False
-
     def read_data(self, query: str, parameters: tuple = (), datatype: str = "dict") -> [Dict, List]:
         """Obtener los datos de una consulta.
 
@@ -95,36 +83,31 @@ class ConnectionDB:
             show_data[Dict,List]: Datos obtenidos.
         """
         show_data = None
-        if self.__get_connection():
-            datatype = datatype.lower()
-            if datatype in ['dict', 'list']:
-                try:
-                    with self.__connection as cnx:
-                        with cnx.cursor() as cursor:
-                            # Ejecutar la consulta
-                            cursor.execute(query, parameters)
-                            query = cursor.mogrify(query, parameters)
-                            data = cursor.fetchall()
-                            # Gets column_names
-                            columns = [column[0].upper() for column in cursor.description]
-                            # Validate the datatype to return
-                            if datatype == 'dict':
-                                dictionary = []
-                                for item in data:
-                                    dictionary.append(dict(zip(columns, item)))
-                                show_data = dictionary
-                            elif datatype == 'list':
-                                show_data = [columns, data]
-                        logger.info(DATA_OBTAINED, query.decode('utf-8'))
-                        return show_data
-                except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
-                    logger.error(str(exc), exc_info=True)
-                finally:
-                    self.__close_connection()
-            else:
-                logger.warning(INVALID_DATATYPE)
+        datatype = datatype.lower()
+        if datatype in ['dict', 'list']:
+            try:
+                with self.__pool.getconn() as cnx:
+                    with cnx.cursor() as cursor:
+                        # Ejecutar la consulta
+                        cursor.execute(query, parameters)
+                        query = cursor.mogrify(query, parameters)
+                        data = cursor.fetchall()
+                        # Gets column_names
+                        columns = [column[0].upper() for column in cursor.description]
+                        # Validate the datatype to return
+                        if datatype == 'dict':
+                            dictionary = []
+                            for item in data:
+                                dictionary.append(dict(zip(columns, item)))
+                            show_data = dictionary
+                        elif datatype == 'list':
+                            show_data = [columns, data]
+                    logger.info(DATA_OBTAINED, query.decode('utf-8'))
+                    return show_data
+            except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
+                logger.error(str(exc), exc_info=True)
         else:
-            logger.warning(NO_CONNECTION)
+            logger.warning(INVALID_DATATYPE)
 
         return show_data
 
@@ -139,24 +122,18 @@ class ConnectionDB:
         Returns:
             bool: True si se ejecuta correctamente, False en caso contrario.
         """
-        if self.__get_connection():
-            try:
-                with self.__connection as cnx:
-                    with cnx.cursor() as cursor:
-                        cursor.execute(query, parameters)
-                    cnx.commit()
-                    logger.info(EXECUTED_QUERY, query)
-                    return True
-            except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
-                logger.error(str(exc), exc_info=True)
-                cnx.rollback()
+        try:
+            with self.__pool.getconn() as cnx:
+                with cnx.cursor() as cursor:
+                    cursor.execute(query, parameters)
+                cnx.commit()
+                logger.info(EXECUTED_QUERY, query)
+                return True
+        except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
+            logger.error(str(exc), exc_info=True)
+            cnx.rollback()
 
-                return False
-            finally:
-                self.__close_connection()
-        else:
-            logger.warning(NO_CONNECTION)
-            return False
+        return False
 
     def execute_many(self, query: str, values: List) -> bool:
         """Ejecutar una consulta con varios valores.
@@ -168,21 +145,16 @@ class ConnectionDB:
         Returns:
             bool: True si se ejecuta correctamente, False en caso contrario.
         """
-        if self.__get_connection():
-            try:
-                with self.__get_connection() as cnx:
-                    with cnx.cursor() as cursor:
-                        cursor.prepare(query)
-                        cursor.executemany(None, values)
-                    cnx.commit()
-                    logger.info(EXECUTED_QUERY, query)
-                    return True
-            except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
-                logger.error(str(exc), exc_info=True)
-                cnx.rollback()
-                return False
-            finally:
-                self.__close_connection()
-        else:
-            logger.warning(NO_CONNECTION)
-            return False
+        try:
+            with self.__pool.getconn() as cnx:
+                with cnx.cursor() as cursor:
+                    cursor.prepare(query)
+                    cursor.executemany(None, values)
+                cnx.commit()
+                logger.info(EXECUTED_QUERY, query)
+                return True
+        except (psycopg2.DatabaseError, psycopg2.Error, Exception) as exc:
+            logger.error(str(exc), exc_info=True)
+            cnx.rollback()
+
+        return False
