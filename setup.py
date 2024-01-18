@@ -18,7 +18,8 @@ LONG_DESC_TYPE = "text/markdown"
 #Paquetes necesarios para que funcione la librería. Se instalarán a la vez si no lo tuvieras ya instalado
 INSTALL_REQUIRES = [
     'psycopg2==2.9.7',
-    'loguru>=0.7.2'
+    'loguru==0.7.2',
+    'asyncpg==0.29.0'
       ]
 
 setup(
