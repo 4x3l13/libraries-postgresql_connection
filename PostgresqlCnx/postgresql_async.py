@@ -85,7 +85,6 @@ class AsyncDB:
                 try:
                     async with self.__connection.transaction():
                         query_result = await self.__connection.fetch(query, *parameters)
-                        query = self.__connection.mogrify(query, *parameters)
                         data = [dict(row.items()) for row in query_result]
                         # Gets column_names
                         columns = [column.upper() for column in query_result[0].keys()] if query_result else []
@@ -94,7 +93,7 @@ class AsyncDB:
                             show_data = data
                         elif datatype == 'list':
                             show_data = [columns, data]
-                        logger.info(f"{DATA_OBTAINED} {query.decode('utf-8')}")
+                        logger.info(f"{DATA_OBTAINED} {query}")
                 except Exception as exc:
                     logger.error(str(exc), exc_info=True)
             else:
